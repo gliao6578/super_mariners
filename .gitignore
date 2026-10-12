@@ -1,0 +1,6 @@
+.DS_Store
+.idea
+
+# Large datasets
+.data/raw/
+.data/cleaned/
