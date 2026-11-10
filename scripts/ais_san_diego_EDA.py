@@ -23,3 +23,5 @@ dc = dc.drop(index = 0)
 
 print(df.shape)
 print(dc.shape)
+
+print(dd["vessel_type"].nunique())
