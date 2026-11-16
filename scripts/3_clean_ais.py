@@ -7,10 +7,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 input_file = PROJECT_ROOT / "data" / "processed" / "san_diego_ais.csv"
 output_file = PROJECT_ROOT / "data" / "processed" / "san_diego_ais_cleaned.csv"
 
-df = pd.read_csv(input_file).copy()
+df = pd.read_csv(input_file, low_memory=False).copy()
 
 #convert timestamps
-df["base_date_time"] = pd.to_datetime(df["base_date_time"])
+df["base_date_time"] = pd.to_datetime(df["base_date_time"], errors="coerce", utc=True)
 
 #do not need to convert numeric columns to numeric data type bc they already floats
 
@@ -70,30 +70,28 @@ missing_indicator_columns = [
 
 for column in missing_indicator_columns:
     if column in df.columns:
-        df[f"{column.lower()}_missing"] = (
-            df[column]
-            .isna()
-            .astype(int)
-        )
+        df[f"{column.lower()}_missing"] = (df[column].isna().astype(int))
 
 
 #quality report
 null_summary = pd.DataFrame({
 
-    "null_count":
-        df.isna().sum(),
+    "null_count":df.isna().sum(),
+    "null_percent": df.isna().mean() * 100
 
-    "null_percent":
-        df.isna().mean() * 100
+}).sort_values("null_percent", ascending=False)
 
-}).sort_values(
-    "null_percent",
-    ascending=False
-)
 
+print("\nCleaning complete.")
+print(f"Rows: {len(df):,}")
+print(f"Unique vessels: {df['mmsi'].nunique():,}")
+print(f"Start: {df['base_date_time'].min()}")
+print(f"End:   {df['base_date_time'].max()}")
 
 print("\nMissing data after cleaning:")
 print(null_summary.to_string())
 print(df.dtypes)
+print(f"\nSaved to: {output_file}")
 
+output_file.parent.mkdir(parents=True, exist_ok=True)
 df.to_csv(output_file, index=False)

@@ -427,4 +427,4 @@ print("Files are stored in:")
 
 print(GEO_DIR)
 print()
-print("These files can now be read by ais_feature_engineering.py using geopandas.read_file().")
+print("These files can now be read by 5_ais_feature_engineering.py using geopandas.read_file().")

@@ -162,7 +162,12 @@ def add_distance_to_feature(vessel_points,feature_file):
 
 
 #========================= End of methods ===========================================
-df = pd.read_csv(input_file).copy()
+# df = pd.read_csv(input_file).copy()
+df = pd.read_csv(input_file,
+    dtype={
+        "imo": "string",
+        "call_sign": "string"},
+    low_memory=False).copy()
 
 df["base_date_time"] = pd.to_datetime( #cvs does not save type so have to change it again
     df["base_date_time"],
@@ -189,6 +194,15 @@ df["time_diff_hours"] = (df["time_diff_minutes"] / 60)
 
 invalid_time = (df["time_diff_seconds"] <= 0)
 df.loc[invalid_time, ["time_diff_seconds", "time_diff_minutes", "time_diff_hours"]] = np.nan
+
+# Break a trajectory when the same MMSI disappears for a long time.
+# This prevents movement features from connecting observations separated by days/months.
+MAX_TRAJECTORY_GAP_MINUTES = 360
+df["trajectory_break"] = df["time_diff_minutes"] > MAX_TRAJECTORY_GAP_MINUTES
+
+break_mask = df["trajectory_break"]
+df.loc[break_mask, ["prev_lat", "prev_lon", "prev_sog", "prev_cog", "prev_heading"]] = np.nan
+
 
 #GROUP 1
 #movement features
@@ -233,6 +247,8 @@ df["implied_speed_knots_clean"] = (df["implied_speed_knots"].where(df["position_
 
 #create 30 minute intervals
 df["window_start"] = (df["base_date_time"].dt.floor("30min"))
+df["year"] = df["base_date_time"].dt.year
+df["month"] = df["base_date_time"].dt.month
 
 window_features = (
     df.groupby(["mmsi", "window_start"], as_index=False)
@@ -285,6 +301,10 @@ window_features = (
         vessel_draft = ("draft", "first")
     ))
 
+# Add calendar fields for analysis and chronological model splitting.
+window_features["year"] = window_features["window_start"].dt.year
+window_features["month"] = window_features["window_start"].dt.month
+
 #net displacement
 window_features["net_displacement_nm"] = (
     haversine_nm(window_features["start_lat"],
@@ -322,14 +342,11 @@ window_features["movement_data_completeness"] = (
 )
 
 #remove windows with too few observations
-window_features = window_features[
-    window_features["observation_count"] >= 3
-].copy()
+window_features = window_features[window_features["observation_count"] >= 3].copy()
 
 # classify each type of vessel
 window_features["vessel_group"] = (
-    window_features["vessel_type"].apply(classify_vessel_group)
-)
+    window_features["vessel_type"].apply(classify_vessel_group))
 
 #GROUP 5
 #Geospatial features
@@ -337,10 +354,7 @@ window_features["vessel_group"] = (
 #convert final position to a geospatial point
 vessel_points = gpd.GeoDataFrame(
     window_features.copy(),
-
-    geometry=gpd.points_from_xy(
-        window_features["end_lon"],
-        window_features["end_lat"] ),
+    geometry=gpd.points_from_xy(window_features["end_lon"],window_features["end_lat"] ),
     crs=GEOGRAPHIC_CRS
 )
 
@@ -361,12 +375,8 @@ window_features["movement_state"] = (
 vessel_projected = vessel_points.to_crs(PROJECTED_CRS)
 
 if BAY_FILE.exists():
-    window_features["inside_bay"] = ( #create feature whether vessel is inside sd bay
-        add_inside_polygon_feature(
-            vessel_points,
-            BAY_FILE,
-            "inside_bay")
-    )
+    # create feature whether vessel is inside sd bay
+    window_features["inside_bay"] = (add_inside_polygon_feature(vessel_points,BAY_FILE,"inside_bay"))
 else: print(f"Bay polygon not found: {BAY_FILE}")
 
 if ANCHORAGE_FILE.exists():
@@ -377,96 +387,43 @@ if ANCHORAGE_FILE.exists():
             "inside_anchorage")
     )
 
-    window_features["distance_to_anchorage_nm"] = ( #distance to nearest anchorage area (nautical mile)
-        add_distance_to_feature(
-            vessel_projected,
-            ANCHORAGE_FILE
-        )
-    )
+    # distance to nearest anchorage area (nautical mile)
+    window_features["distance_to_anchorage_nm"] = ( add_distance_to_feature(vessel_projected,ANCHORAGE_FILE))
 else: print(f"Anchorage file not found: {ANCHORAGE_FILE}")
 
 if CHANNEL_FILE.exists():
-    window_features["distance_to_shipping_channel_nm"] = ( #distance to nearest navigation channel (nautical mile)
-        add_distance_to_feature(
-            vessel_projected,
-            CHANNEL_FILE)
-    )
+    # distance to nearest navigation channel (nautical mile)
+    window_features["distance_to_shipping_channel_nm"] = (add_distance_to_feature(vessel_projected,CHANNEL_FILE))
 else: print(f"navigation channel file not found: {CHANNEL_FILE}")
 
 if RESTRICTED_FILE.exists():
-    window_features["inside_restricted_area"] = ( #whether vessel is inside restricted area
-        add_inside_polygon_feature(
-            vessel_points,
-            RESTRICTED_FILE,
-            "inside_restricted_area")
-    )
+    # whether vessel is inside restricted area
+    window_features["inside_restricted_area"] = (add_inside_polygon_feature(vessel_points,RESTRICTED_FILE,"inside_restricted_area"))
 
-    window_features["distance_to_restricted_area_nm"] = ( #distance to nearest restricted area (nautical mile)
-        add_distance_to_feature(
-            vessel_projected,
-            RESTRICTED_FILE
-        )
-    )
+    # distance to nearest restricted area (nautical mile)
+    window_features["distance_to_restricted_area_nm"] = (add_distance_to_feature(vessel_projected,RESTRICTED_FILE))
 
     if MILITARY_FILE.exists():
-        window_features["inside_military_area"] = (
-            add_inside_polygon_feature(
-                vessel_points,
-                MILITARY_FILE,
-                "inside_military_area"
-            )
-        )
+        window_features["inside_military_area"] = (add_inside_polygon_feature(vessel_points,MILITARY_FILE,"inside_military_area"))
 
-        window_features[
-            "distance_to_military_area_nm"
-        ] = add_distance_to_feature(
-            vessel_points,
-            MILITARY_FILE
-        )
+        window_features["distance_to_military_area_nm"] = add_distance_to_feature(vessel_points,MILITARY_FILE)
 
     if OFFSHORE_SAFETY_FILE.exists():
-        window_features[
-            "inside_offshore_safety_zone"
-        ] = add_inside_polygon_feature(
-            vessel_points,
-            OFFSHORE_SAFETY_FILE,
-            "inside_offshore_safety_zone"
-        )
-
-        window_features[
-            "distance_to_offshore_safety_zone_nm"
-        ] = add_distance_to_feature(
-            vessel_points,
-            OFFSHORE_SAFETY_FILE
-        )
+        window_features["inside_offshore_safety_zone"] = add_inside_polygon_feature(vessel_points,OFFSHORE_SAFETY_FILE,"inside_offshore_safety_zone")
+        window_features["distance_to_offshore_safety_zone_nm"] = add_distance_to_feature(vessel_points,OFFSHORE_SAFETY_FILE)
 
     if DEGAUSSING_FILE.exists():
-        window_features[
-            "inside_degaussing_range"
-        ] = add_inside_polygon_feature(
-            vessel_points,
-            DEGAUSSING_FILE,
-            "inside_degaussing_range"
-        )
-
-        window_features[
-            "distance_to_degaussing_range_nm"] = add_distance_to_feature(
-            vessel_points,
-            DEGAUSSING_FILE
-        )
+        window_features["inside_degaussing_range"] = add_inside_polygon_feature(vessel_points,DEGAUSSING_FILE,"inside_degaussing_range")
+        window_features["distance_to_degaussing_range_nm"] = add_distance_to_feature(vessel_points,DEGAUSSING_FILE)
 
 else: print(f"Restricted area file not found: {RESTRICTED_FILE}")
 
 #window quality flag
 # CAN CHANGE THRESHOLD AFTER MORE TESTING
 window_features["usable_for_model"] = (
-    (
-        window_features["observation_count"] >= 3
-    )
+    (window_features["observation_count"] >= 3)
     &
-    (
-        window_features["movement_data_completeness"] >= 0.50
-    )
+    (window_features["movement_data_completeness"] >= 0.50)
 )
 
 # saving results
@@ -479,28 +436,13 @@ window_features.to_csv(output_file2,index=False)
 print()
 print("Feature engineering complete.")
 print()
-
-print(
-    f"Point-level observations: "
-    f"{len(df):,}")
-
-print(
-    f"30-minute windows: "
-    f"{len(window_features):,}")
-
-print(
-    f"Usable model windows: "
-    f"{window_features['usable_for_model'].sum():,}")
-
+print(f"Point-level observations: {len(df):,}")
+print(f"30-minute windows: {len(window_features):,}")
+print(f"Usable model windows: {window_features['usable_for_model'].sum():,}")
 print()
-print(
-    f"Point features saved to:\n"
-    f"{output_file}")
-
+print(f"Point features saved to:\n{output_file}")
 print()
-print(
-    f"Window features saved to:\n"
-    f"{output_file2}")
+print(f"Window features saved to:\n{output_file2}")
 
 # print(
 #     window_features[
