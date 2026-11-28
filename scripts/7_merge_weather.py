@@ -7,7 +7,7 @@ import pandas as pd
 
 # FILE PATHS
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-AIS_FILE = (PROJECT_ROOT / "data" / "processed" / "san_diego_30min_features.csv")
+AIS_FILE = (PROJECT_ROOT / "data" / "processed" / "san_diego_30min_featuresOLD.csv")
 WEATHER_FILE = ( PROJECT_ROOT / "data" / "weather" / "ndbc_weather.csv")
 OUTPUT_FILE = ( PROJECT_ROOT / "data" / "processed" / "san_diego_30min_features_weather.csv")
 

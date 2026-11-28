@@ -124,7 +124,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, ConfusionMatrixDisplay
 
 PROJECT_ROOT = Path("/content/super_mariners-main")
-INPUT_FILE = PROJECT_ROOT / "data" / "processed" / "san_diego_30min_features.csv"
+INPUT_FILE = PROJECT_ROOT / "data" / "processed" / "san_diego_30min_featuresOLD.csv"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "processed"
 
 df = pd.read_csv(INPUT_FILE, low_memory=False)

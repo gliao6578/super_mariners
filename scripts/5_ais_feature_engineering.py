@@ -7,7 +7,7 @@ import geopandas as gpd
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 input_file = PROJECT_ROOT / "data" / "processed" / "san_diego_ais_cleaned.csv"
 output_file = PROJECT_ROOT / "data" / "processed" / "san_diego_30min_features"
-output_file2 = PROJECT_ROOT / "data" / "processed" / "san_diego_30min_features.csv"
+output_file2 = PROJECT_ROOT / "data" / "processed" / "san_diego_30min_featuresOLD.csv"
 
 GEOSPATIAL_DIR = PROJECT_ROOT / "data" / "geospatial"
 # Change these filenames to the actual files you download.
